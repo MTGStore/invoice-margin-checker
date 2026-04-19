@@ -450,14 +450,14 @@
                     const productName = cells[0].textContent.trim();
                     const upc = upcMap[productName] || 'N/A';
                     
-                    report += `PRODUCT: ${productName}\n`;
-                    report += `UPC: ${upc}\n`;
-                    report += `CATEGORY: ${cells[1].textContent}\n`;
-                    report += `UNITS: ${cells[2].textContent}\n`;
-                    report += `CURRENT PRICE: ${cells[3].textContent}\n`;
-                    report += `CURRENT MARGIN: ${cells[4].textContent}\n`;
-                    report += `TARGET RANGE: ${cells[5].textContent}\n`;
-                    report += `SUGGESTED RETAIL: ${cells[6].textContent.split('\n')[0]}\n`;
+                    report += `*** PRODUCT: ${productName}\n`;
+                    report += `*** UPC: ${upc}\n`;
+                    report += `*** CATEGORY: ${cells[1].textContent}\n`;
+                    report += `*** UNITS: ${cells[2].textContent}\n`;
+                    report += `*** CURRENT PRICE: ${cells[3].textContent}\n`;
+                    report += `*** CURRENT MARGIN: ${cells[4].textContent}\n`;
+                    report += `*** TARGET RANGE: ${cells[5].textContent}\n`;
+                    report += `*** SUGGESTED RETAIL: ${cells[6].textContent.split('\n')[0]}\n`;
                     report += `---\n\n`;
                 }
             });
