@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Margin Checker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { max-width: 1600px; margin: 0 auto; }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 { font-size: 36px; margin-bottom: 10px; }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .form-group { margin-bottom: 20px; }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 13px;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 400px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        
+        button:hover { background: #5568d3; }
+        
+        .violations-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        
+        .violations-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .violations-table td {
+            padding: 12px;
+            border: 1px solid #ddd;
+        }
+        
+        .violations-table tr:nth-child(even) { background: #f9f9f9; }
+        
+        .status-critical {
+            background: #ffcdd2;
+            color: #c62828;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        
+        .no-violations {
+            padding: 30px;
+            text-align: center;
+            color: #4caf50;
+            font-weight: 600;
+            background: #e8f5e9;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        
+        .violations-header {
+            padding: 15px;
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+        
+        .summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .summary-box {
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .summary-ok { background: #e8f5e9; color: #2e7d32; }
+        .summary-critical { background: #ffebee; color: #c62828; }
+        
+        .summary-box .number { font-size: 32px; font-weight: bold; }
+        
+        @media (max-width: 1024px) {
+            .content { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 Invoice Margin Checker</h1>
+            <p>Paste invoice data → See violations with pricing</p>
+        </div>
+        
+        <div class="content">
+            <div class="card">
+                <h2>📋 Paste Invoice Data</h2>
+                
+                <div class="form-group">
+                    <label>Vendor</label>
+                    <input type="text" id="vendor" placeholder="e.g., Pepsi Bottling">
+                </div>
+                
+                <div class="form-group">
+                    <label>Invoice Date</label>
+                    <input type="date" id="date">
+                </div>
+                
+                <textarea id="invoiceData" placeholder="Paste the invoice table here"></textarea>
+                
+                <button onclick="processInvoice()">🔍 Check Margins</button>
+                <button onclick="exportToEmail()" style="background: #ea4335; margin-top: 10px;">📧 Export Email</button>
+                <button onclick="exportToWhatsApp()" style="background: #25d366; margin-top: 10px;">💬 Share WhatsApp</button>
+            </div>
+            
+            <div class="card">
+                <h2>📊 Violations</h2>
+                <div id="results"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('date').valueAsDate = new Date();
+        
+        const MARGINS = {
+            'Soda': { min: 36, max: 44 },
+            'Isotonic': { min: 38, max: 45 },
+            'Energy': { min: 38, max: 45 },
+            'Water/FL Water': { min: 42, max: 48 },
+            'Non ALH': { min: 36, max: 44 },
+            'TH Non Alh': { min: 20, max: 25 },
+            'Non-Tax Groc': { min: 33, max: 38 },
+            'Tax Groc': { min: 33, max: 38 },
+            'Nicotine Pouches': { min: 18, max: 24 },
+            'Beer-Single': { min: 25, max: 30 },
+            'Beer-PKG': { min: 20, max: 25 },
+            'Wine': { min: 20, max: 25 },
+            'Cig Pack': { min: 8, max: 15 },
+            'Health/Hygiene': { min: 38, max: 44 }
+        };
+        
+        function parseInvoice(text) {
+            const items = [];
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            
+            let i = 0;
+            while (i < lines.length) {
+                const line = lines[i];
+                
+                // Check if this line starts a product (has 8+ digit UPC in next line or contains margin %)
+                if (i + 1 < lines.length && lines[i + 1].match(/^\d{8,}/)) {
+                    // Multi-line format: Product name, then UPC, then category, etc
+                    const product = line;
+                    const upc = lines[i + 1];
+                    
+                    // Find category and margin in next lines
+                    let category = 'Other';
+                    let retail = null;
+                    let units = null;
+                    let margin = null;
+                    
+                    // Look ahead for category and margin
+                    for (let j = i + 2; j < Math.min(i + 10, lines.length); j++) {
+                        const checkLine = lines[j];
+                        
+                        if (checkLine.match(/1Energy/)) category = 'Energy';
+                        else if (checkLine.match(/1Isotonic/)) category = 'Isotonic';
+                        else if (checkLine.match(/1Soda/)) category = 'Soda';
+                        else if (checkLine.match(/1Non ALH/)) category = 'Non ALH';
+                        else if (checkLine.match(/1TH Non Alh/)) category = 'TH Non Alh';
+                        else if (checkLine.match(/1Non Tax Groc/)) category = 'Non-Tax Groc';
+                        else if (checkLine.match(/2Beer-PKG/)) category = 'Beer-PKG';
+                        else if (checkLine.match(/2Beer-Single/)) category = 'Beer-Single';
+                        else if (checkLine.match(/1Water/)) category = 'Water/FL Water';
+                        else if (checkLine.match(/2Tax Groc/)) category = 'Tax Groc';
+                        
+                        // Look for retail price and margin on same line
+                        const priceMatch = checkLine.match(/\$(\d+\.\d+).*?(\d+\.\d+)%\s*$/);
+                        if (priceMatch) {
+                            retail = parseFloat(priceMatch[1]);
+                            margin = parseFloat(priceMatch[2]);
+                            
+                            // Extract units (number before the $)
+                            const unitsMatch = checkLine.match(/\s(\d+)\s+\$\d+\.\d+/);
+                            units = unitsMatch ? unitsMatch[1] : '0';
+                        }
+                        
+                        if (margin) break;
+                    }
+                    
+                    if (product && retail && margin && category !== 'Other') {
+                        // Determine status for color coding
+                        const guide = findGuide(category);
+                        let priceStatus = 'ok';
+                        if (guide) {
+                            if (margin < guide.min) {
+                                priceStatus = 'increase';
+                            } else if (margin > guide.max) {
+                                priceStatus = 'decrease';
+                            }
+                        }
+                        
+                        items.push({
+                            product: product.substring(0, 100),
+                            category: category,
+                            retail: retail,
+                            margin: margin,
+                            units: units || '0',
+                            priceStatus: priceStatus
+                        });
+                    }
+                    
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            
+            return items;
+        }
+        
+        function findGuide(cat) {
+            return MARGINS[cat] || null;
+        }
+        
+        function processInvoice() {
+            const vendor = document.getElementById('vendor').value.trim();
+            const invoiceData = document.getElementById('invoiceData').value.trim();
+            const resultsDiv = document.getElementById('results');
+            
+            if (!invoiceData) {
+                resultsDiv.innerHTML = '<div style="color: red;">❌ Paste invoice data</div>';
+                return;
+            }
+            
+            const items = parseInvoice(invoiceData);
+            
+            if (items.length === 0) {
+                resultsDiv.innerHTML = '<div style="color: red;">❌ No items parsed</div>';
+                return;
+            }
+            
+            // Check margins
+            let ok = 0, critical = 0;
+            const violations = [];
+            
+            for (const item of items) {
+                const guide = findGuide(item.category);
+                if (!guide) continue;
+                
+                if (item.margin >= guide.min && item.margin <= guide.max) {
+                    ok++;
+                } else {
+                    critical++;
+                    const targetMargin = (guide.min + guide.max) / 2;
+                    const cost = item.retail - (item.retail * (item.margin / 100));
+                    const suggestedRetail = cost / (1 - (targetMargin / 100));
+                    
+                    violations.push({
+                        product: item.product,
+                        category: item.category,
+                        units: item.units,
+                        retail: item.retail.toFixed(2),
+                        margin: item.margin.toFixed(2),
+                        target: `${guide.min}-${guide.max}%`,
+                        suggested: suggestedRetail.toFixed(2),
+                        diff: (suggestedRetail - item.retail).toFixed(2),
+                        priceStatus: item.priceStatus
+                    });
+                }
+            }
+            
+            if (violations.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="summary">
+                        <div class="summary-box summary-ok"><div class="number">${ok + critical}</div>ALL OK</div>
+                    </div>
+                    <div class="no-violations">✅ All items within guidelines!</div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="summary">
+                    <div class="summary-box summary-ok"><div class="number">${ok}</div>OK</div>
+                    <div class="summary-box summary-critical"><div class="number">${critical}</div>VIOLATIONS</div>
+                </div>
+                <div class="violations-header">⚠️ ${violations.length} VIOLATIONS</div>
+                <table class="violations-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Units</th>
+                            <th>Current Price</th>
+                            <th>Current Margin</th>
+                            <th>Target</th>
+                            <th style="background: #4caf50;">Suggested Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const v of violations) {
+                // Determine color based on action needed
+                let bgColor = '#c8e6c9';  // green - OK
+                let borderStyle = '4px solid #4caf50';
+                
+                if (v.priceStatus === 'increase') {
+                    bgColor = '#ffcccc';  // red - need to increase price (margin too low)
+                    borderStyle = '4px solid #f44336';
+                } else if (v.priceStatus === 'decrease') {
+                    bgColor = '#ffe0b2';  // orange - need to decrease price (margin too high)
+                    borderStyle = '4px solid #ff9800';
+                }
+                
+                html += `
+                    <tr>
+                        <td><strong>${v.product}</strong></td>
+                        <td>${v.category}</td>
+                        <td>${v.units}</td>
+                        <td>$${v.retail}</td>
+                        <td><strong>${v.margin}%</strong></td>
+                        <td>${v.target}</td>
+                        <td style="background: ${bgColor}; font-weight: 600; border-left: ${borderStyle}; padding: 12px; color: #000;">$${v.suggested}<br><small>(${v.diff > 0 ? '+' : ''}$${v.diff})</small></td>
+                    </tr>
+                `;
+            }
+            
+            html += '</tbody></table>';
+            resultsDiv.innerHTML = html;
+        }
+        
+        function generateReport() {
+            const vendor = document.getElementById('vendor').value.trim() || 'Unknown Vendor';
+            const date = document.getElementById('date').value || 'N/A';
+            const resultsDiv = document.getElementById('results');
+            
+            const table = resultsDiv.querySelector('table');
+            if (!table) {
+                alert('No violations to export. Run "Check Margins" first.');
+                return null;
+            }
+            
+            let report = `INVOICE MARGIN VIOLATIONS REPORT\n`;
+            report += `================================\n\n`;
+            report += `Vendor: ${vendor}\n`;
+            report += `Date: ${date}\n`;
+            report += `Generated: ${new Date().toLocaleString()}\n\n`;
+            
+            const summaryBoxes = resultsDiv.querySelectorAll('.summary-box');
+            if (summaryBoxes.length >= 2) {
+                report += `SUMMARY:\n`;
+                report += `OK Items: ${summaryBoxes[0].querySelector('.number').textContent}\n`;
+                report += `Violations: ${summaryBoxes[1].querySelector('.number').textContent}\n\n`;
+            }
+            
+            report += `VIOLATIONS DETAILS:\n`;
+            report += `==================\n\n`;
+            
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 7) {
+                    report += `Product: ${cells[0].textContent}\n`;
+                    report += `Category: ${cells[1].textContent}\n`;
+                    report += `Units: ${cells[2].textContent}\n`;
+                    report += `Current Price: ${cells[3].textContent}\n`;
+                    report += `Current Margin: ${cells[4].textContent}\n`;
+                    report += `Target Range: ${cells[5].textContent}\n`;
+                    report += `Suggested Price: ${cells[6].textContent.split('\n')[0]}\n`;
+                    report += `---\n\n`;
+                }
+            });
+            
+            return report;
+        }
+        
+        function exportToEmail() {
+            const report = generateReport();
+            if (!report) return;
+            
+            const vendor = document.getElementById('vendor').value.trim() || 'Invoice';
+            const subject = `Invoice Margin Violations - ${vendor}`;
+            const body = encodeURIComponent(report);
+            
+            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${body}`;
+        }
+        
+        function exportToWhatsApp() {
+            const report = generateReport();
+            if (!report) return;
+            
+            const message = encodeURIComponent(report);
+            window.open(`https://wa.me/?text=${message}`, '_blank');
+        }
+    </script>
+</body>
+</html>
