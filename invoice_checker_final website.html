@@ -260,16 +260,17 @@
                 } else {
                     critical++;
                     
-                    let suggestedRetail = item.cost / (1 - guide.min / 100);
-                    if (item.margin > guide.max) {
-                        suggestedRetail = item.cost / (1 - guide.max / 100);
-                    }
-                    
+                    let suggestedRetail = item.retail;
                     let priceStatus = 'ok';
+                    
                     if (item.margin < guide.min) {
+                        // Margin too low - need to INCREASE price
                         priceStatus = 'increase';
+                        suggestedRetail = item.cost / (1 - (guide.min / 100));
                     } else if (item.margin > guide.max) {
+                        // Margin too high - need to DECREASE price
                         priceStatus = 'decrease';
+                        suggestedRetail = item.cost / (1 - (guide.max / 100));
                     }
                     
                     violations.push({
@@ -281,7 +282,7 @@
                         target: `${guide.min}-${guide.max}%`,
                         suggested: suggestedRetail.toFixed(2),
                         diff: (suggestedRetail - item.retail).toFixed(2),
-                        priceStatus: item.priceStatus
+                        priceStatus: priceStatus
                     });
                 }
             }
