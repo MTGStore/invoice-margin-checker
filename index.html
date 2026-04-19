@@ -6,12 +6,7 @@
     <title>Invoice Margin Checker</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
         .container { max-width: 1600px; margin: 0 auto; }
         .header { text-align: center; color: white; margin-bottom: 30px; }
         .header h1 { font-size: 36px; margin-bottom: 10px; }
@@ -70,15 +65,15 @@
     <script>
         document.getElementById('date').valueAsDate = new Date();
         const MARGINS = {
-            'Candy': { min: 35, max: 42 },
-            'Chips/Salty': { min: 35, max: 42 },
             'Bakery': { min: 35, max: 42 },
+            'Chips/Salty': { min: 35, max: 42 },
+            'Candy': { min: 35, max: 42 },
             'Soda': { min: 36, max: 44 },
-            'Non-Alcoholic Beverages': { min: 36, max: 44 },
             'Isotonic': { min: 38, max: 45 },
             'Energy': { min: 38, max: 45 },
             'Water/FL Water': { min: 42, max: 48 },
             'Frozen/Ice Cream': { min: 38, max: 45 },
+            'Non-Alcoholic Beverages': { min: 36, max: 44 },
             'TH Non Alc': { min: 20, max: 25 },
             'Non-Tax Groc': { min: 33, max: 38 },
             'Tax Groc': { min: 33, max: 38 },
@@ -96,22 +91,26 @@
             'Novelty-Vape': { min: 45, max: 55 },
             'Novelty-Merch': { min: 50, max: 60 },
             'Health/Hygiene': { min: 38, max: 44 },
-            'Auto': { min: 33, max: 38 },
-            'Non ALH': { min: 36, max: 44 }
+            'Auto': { min: 33, max: 38 }
         };
+        
         function parseInvoice(text) {
             const items = [];
             const lines = text.split('\n').map(l => l.trim()).filter(l => l);
             let i = 0;
+            
             while (i < lines.length) {
                 const productName = lines[i];
+                
                 if (i + 1 < lines.length && /^\d{8,}/.test(lines[i + 1])) {
                     const upc = lines[i + 1];
                     let category = 'Other';
+                    
                     if (i + 2 < lines.length) {
                         const catMatch = lines[i + 2].match(/^\d(.+)$/);
-                        if (catMatch) { category = catMatch[1].trim(); }
+                        if (catMatch) category = catMatch[1].trim();
                     }
+                    
                     let dataLine = null;
                     for (let j = i + 3; j < Math.min(i + 10, lines.length); j++) {
                         if (lines[j].includes('$') && lines[j].includes('%')) {
@@ -119,24 +118,30 @@
                             break;
                         }
                     }
+                    
                     if (dataLine && category !== 'Other') {
                         const prices = dataLine.match(/\$[\d.]+/g) || [];
                         const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
                         const qtyMatch = dataLine.match(/^([\d.]+)/);
-                        if (prices.length >= 3 && margins.length > 0 && qtyMatch) {
+                        
+                        if (prices.length >= 5 && margins.length > 0 && qtyMatch) {
                             const qty = parseFloat(qtyMatch[1]);
-                            const caseRetail = parseFloat(prices[Math.min(3, prices.length - 1)].replace('$', ''));
+                            const itemRetailTotal = parseFloat(prices[1].replace('$', ''));
+                            const caseRetailTotal = parseFloat(prices[4].replace('$', ''));
                             const marginPercent = parseFloat(margins[0]);
-                            const perUnitRetail = caseRetail / qty;
-                            const costForCase = caseRetail / (1 - (marginPercent / 100));
-                            const perUnitCost = costForCase / qty;
+                            
+                            const perUnitRetail = itemRetailTotal / qty;
+                            const perUnitCost = caseRetailTotal / qty;
+                            
                             if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0) {
                                 const guide = MARGINS[category];
                                 let priceStatus = 'ok';
+                                
                                 if (guide) {
-                                    if (marginPercent < guide.min) { priceStatus = 'increase'; }
-                                    else if (marginPercent > guide.max) { priceStatus = 'decrease'; }
+                                    if (marginPercent < guide.min) priceStatus = 'increase';
+                                    else if (marginPercent > guide.max) priceStatus = 'decrease';
                                 }
+                                
                                 items.push({
                                     product: productName.substring(0, 100),
                                     upc: upc,
@@ -151,33 +156,40 @@
                         }
                     }
                     i++;
-                } else { i++; }
+                } else {
+                    i++;
+                }
             }
             return items;
         }
+        
         function processInvoice() {
             const vendor = document.getElementById('vendor').value.trim();
             const invoiceData = document.getElementById('invoiceData').value.trim();
             const resultsDiv = document.getElementById('results');
+            
             if (!invoiceData) { resultsDiv.innerHTML = '<div style="color: red;">❌ Paste invoice data</div>'; return; }
             const items = parseInvoice(invoiceData);
             if (items.length === 0) { resultsDiv.innerHTML = '<div style="color: red;">❌ No items parsed</div>'; return; }
+            
             let ok = 0, critical = 0;
             const violations = [];
+            
             for (const item of items) {
                 const guide = MARGINS[item.category];
                 if (!guide) continue;
+                
                 if (item.margin >= guide.min && item.margin <= guide.max) {
                     ok++;
                 } else {
                     critical++;
                     const targetMargin = (guide.min + guide.max) / 2;
                     const suggestedRetail = item.costPerUnit / (1 - (targetMargin / 100));
+                    
                     violations.push({
                         product: item.product,
                         category: item.category,
                         units: item.units,
-                        upc: item.upc,
                         retail: item.retail.toFixed(2),
                         margin: item.margin.toFixed(2),
                         target: `${guide.min}-${guide.max}%`,
@@ -187,11 +199,14 @@
                     });
                 }
             }
+            
             if (violations.length === 0) {
                 resultsDiv.innerHTML = `<div class="summary"><div class="summary-box summary-ok"><div class="number">${ok + critical}</div>ALL OK</div></div><div class="no-violations">✅ All items within guidelines!</div>`;
                 return;
             }
+            
             let html = `<div class="summary"><div class="summary-box summary-ok"><div class="number">${ok}</div>OK</div><div class="summary-box summary-critical"><div class="number">${critical}</div>VIOLATIONS</div></div><div class="violations-header">⚠️ ${violations.length} VIOLATIONS</div><table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Units</th><th>Current Price</th><th>Current Margin</th><th>Target</th><th style="background: #4caf50;">Suggested Price</th></tr></thead><tbody>`;
+            
             for (const v of violations) {
                 let bgColor = '#c8e6c9';
                 let borderStyle = '4px solid #4caf50';
@@ -202,16 +217,18 @@
             html += '</tbody></table>';
             resultsDiv.innerHTML = html;
         }
+        
         function generateReport() {
             const vendor = document.getElementById('vendor').value.trim() || 'Unknown Vendor';
             const date = document.getElementById('date').value || 'N/A';
             const resultsDiv = document.getElementById('results');
             const table = resultsDiv.querySelector('table');
-            if (!table) { alert('No violations to export. Run "Check Margins" first.'); return null; }
+            if (!table) { alert('No violations. Run "Check Margins" first.'); return null; }
+            
             let report = `INVOICE MARGIN VIOLATIONS REPORT\n================================\n\nVendor: ${vendor}\nDate: ${date}\nGenerated: ${new Date().toLocaleString()}\n\n`;
             const summaryBoxes = resultsDiv.querySelectorAll('.summary-box');
             if (summaryBoxes.length >= 2) {
-                report += `SUMMARY:\nOK Items: ${summaryBoxes[0].querySelector('.number').textContent}\nViolations: ${summaryBoxes[1].querySelector('.number').textContent}\n\n`;
+                report += `OK Items: ${summaryBoxes[0].querySelector('.number').textContent}\nViolations: ${summaryBoxes[1].querySelector('.number').textContent}\n\n`;
             }
             report += `VIOLATIONS DETAILS:\n==================\n\n`;
             const rows = table.querySelectorAll('tbody tr');
@@ -223,19 +240,19 @@
             });
             return report;
         }
+        
         function exportToEmail() {
             const report = generateReport();
             if (!report) return;
             const vendor = document.getElementById('vendor').value.trim() || 'Invoice';
             const subject = `Invoice Margin Violations - ${vendor}`;
-            const body = encodeURIComponent(report);
-            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${body}`;
+            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`;
         }
+        
         function exportToWhatsApp() {
             const report = generateReport();
             if (!report) return;
-            const message = encodeURIComponent(report);
-            window.open(`https://wa.me/?text=${message}`, '_blank');
+            window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
         }
     </script>
 </body>
