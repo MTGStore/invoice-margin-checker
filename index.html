@@ -114,15 +114,6 @@
         
         .violations-table tr:nth-child(even) { background: #f9f9f9; }
         
-        .status-critical {
-            background: #ffcdd2;
-            color: #c62828;
-            font-weight: 600;
-            padding: 4px 8px;
-            border-radius: 4px;
-            display: inline-block;
-        }
-        
         .no-violations {
             padding: 30px;
             text-align: center;
@@ -171,7 +162,7 @@
     <div class="container">
         <div class="header">
             <h1>💰 Invoice Margin Checker</h1>
-            <p>Paste invoice data → See violations with pricing</p>
+            <p>Paste CStore invoice data → See violations with pricing</p>
         </div>
         
         <div class="content">
@@ -206,20 +197,34 @@
         document.getElementById('date').valueAsDate = new Date();
         
         const MARGINS = {
+            'Candy': { min: 35, max: 42 },
+            'Chips/Salty': { min: 35, max: 42 },
+            'Bakery': { min: 35, max: 42 },
             'Soda': { min: 36, max: 44 },
+            'Non-Alcoholic Beverages': { min: 36, max: 44 },
             'Isotonic': { min: 38, max: 45 },
             'Energy': { min: 38, max: 45 },
             'Water/FL Water': { min: 42, max: 48 },
-            'Non ALH': { min: 36, max: 44 },
-            'TH Non Alh': { min: 20, max: 25 },
+            'Frozen/Ice Cream': { min: 38, max: 45 },
+            'TH Non Alc': { min: 20, max: 25 },
             'Non-Tax Groc': { min: 33, max: 38 },
             'Tax Groc': { min: 33, max: 38 },
+            'Cig Pack': { min: 8, max: 15 },
+            'Cig Carton': { min: 7, max: 10 },
+            'Cigar/Leaf': { min: 26, max: 35 },
+            'E-Cigs': { min: 18, max: 25 },
+            'Dip Can': { min: 18, max: 23 },
+            'Dip Roll/Tobacco': { min: 14, max: 18 },
             'Nicotine Pouches': { min: 18, max: 24 },
             'Beer-Single': { min: 25, max: 30 },
             'Beer-PKG': { min: 20, max: 25 },
             'Wine': { min: 20, max: 25 },
-            'Cig Pack': { min: 8, max: 15 },
-            'Health/Hygiene': { min: 38, max: 44 }
+            'Novelty-Other': { min: 50, max: 60 },
+            'Novelty-Vape': { min: 45, max: 55 },
+            'Novelty-Merch': { min: 50, max: 60 },
+            'Health/Hygiene': { min: 38, max: 44 },
+            'Auto': { min: 33, max: 38 },
+            'Non ALH': { min: 36, max: 44 }
         };
         
         function parseInvoice(text) {
@@ -228,75 +233,86 @@
             
             let i = 0;
             while (i < lines.length) {
-                const line = lines[i];
+                const productName = lines[i];
                 
-                if (i + 1 < lines.length && lines[i + 1].match(/^\d{8,}/)) {
-                    const product = line;
+                // Check if next line is UPC (8+ digits)
+                if (i + 1 < lines.length && /^\d{8,}/.test(lines[i + 1])) {
                     const upc = lines[i + 1];
                     
+                    // Next line should have category (e.g., "1Chips/Salty")
                     let category = 'Other';
-                    let retail = null;
-                    let units = null;
-                    let margin = null;
-                    
-                    for (let j = i + 2; j < Math.min(i + 10, lines.length); j++) {
-                        const checkLine = lines[j];
-                        
-                        if (checkLine.match(/1Energy/)) category = 'Energy';
-                        else if (checkLine.match(/1Isotonic/)) category = 'Isotonic';
-                        else if (checkLine.match(/1Soda/)) category = 'Soda';
-                        else if (checkLine.match(/1Non ALH/)) category = 'Non ALH';
-                        else if (checkLine.match(/1TH Non Alh/)) category = 'TH Non Alh';
-                        else if (checkLine.match(/1Non Tax Groc/)) category = 'Non-Tax Groc';
-                        else if (checkLine.match(/2Beer-PKG/)) category = 'Beer-PKG';
-                        else if (checkLine.match(/2Beer-Single/)) category = 'Beer-Single';
-                        else if (checkLine.match(/1Water/)) category = 'Water/FL Water';
-                        else if (checkLine.match(/2Tax Groc/)) category = 'Tax Groc';
-                        
-                        const priceMatch = checkLine.match(/\$(\d+\.\d+).*?(\d+\.\d+)%\s*$/);
-                        if (priceMatch) {
-                            retail = parseFloat(priceMatch[1]);
-                            margin = parseFloat(priceMatch[2]);
-                            
-                            const unitsMatch = checkLine.match(/\s(\d+)\s+\$\d+\.\d+/);
-                            units = unitsMatch ? unitsMatch[1] : '0';
+                    if (i + 2 < lines.length) {
+                        const categoryLine = lines[i + 2];
+                        // Extract category from lines like "1Chips/Salty" or "2Beer-PKG"
+                        const catMatch = categoryLine.match(/^\d(.+)$/);
+                        if (catMatch) {
+                            category = catMatch[1].trim();
                         }
-                        
-                        if (margin) break;
                     }
                     
-                    if (product && retail && margin && category !== 'Other') {
-                        const guide = findGuide(category);
-                        let priceStatus = 'ok';
-                        if (guide) {
-                            if (margin < guide.min) {
-                                priceStatus = 'increase';
-                            } else if (margin > guide.max) {
-                                priceStatus = 'decrease';
+                    // Find the data line (contains prices and margin %)
+                    let dataLine = null;
+                    let dataLineIndex = -1;
+                    for (let j = i + 3; j < Math.min(i + 10, lines.length); j++) {
+                        if (lines[j].includes('$') && lines[j].includes('%')) {
+                            dataLine = lines[j];
+                            dataLineIndex = j;
+                            break;
+                        }
+                    }
+                    
+                    if (dataLine) {
+                        // Parse: "3.0000 | $4.291 | $12.87 | $3.0667 | $0.00 | $9.20 | 28.52% | $0.00 | 28.52%"
+                        // OR: "3.0000$4.291$12.87$3.0667$0.00$9.2028.52%$0.00   28.52%"
+                        
+                        // Extract all dollar amounts and percentages
+                        const prices = dataLine.match(/\$[\d.]+/g) || [];
+                        const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
+                        const qty = dataLine.match(/^([\d.]+)/);
+                        
+                        if (prices.length >= 3 && margins.length > 0 && qty) {
+                            const qtyNum = parseFloat(qty[1]);
+                            const caseCost = parseFloat(prices[prices.length - 3].replace('$', ''));
+                            const itemRetail = parseFloat(prices[prices.length - 4].replace('$', '')); // EDI SRP or Item Retail
+                            const caseRetail = parseFloat(prices[prices.length - 5].replace('$', ''));
+                            const marginPercent = parseFloat(margins[margins.length - 1]);
+                            
+                            // Calculate per-unit retail
+                            const perUnitRetail = caseRetail / qtyNum;
+                            
+                            if (category !== 'Other' && !isNaN(perUnitRetail) && !isNaN(marginPercent)) {
+                                const guide = MARGINS[category];
+                                let priceStatus = 'ok';
+                                
+                                if (guide) {
+                                    if (marginPercent < guide.min) {
+                                        priceStatus = 'increase';
+                                    } else if (marginPercent > guide.max) {
+                                        priceStatus = 'decrease';
+                                    }
+                                }
+                                
+                                items.push({
+                                    product: productName.substring(0, 100),
+                                    upc: upc,
+                                    category: category,
+                                    units: qtyNum.toFixed(0),
+                                    retail: perUnitRetail,
+                                    margin: marginPercent,
+                                    caseCost: caseCost,
+                                    priceStatus: priceStatus
+                                });
                             }
                         }
-                        
-                        items.push({
-                            product: product.substring(0, 100),
-                            category: category,
-                            retail: retail,
-                            margin: margin,
-                            units: units || '0',
-                            priceStatus: priceStatus
-                        });
                     }
                     
-                    i += 1;
+                    i = dataLineIndex > -1 ? dataLineIndex + 1 : i + 1;
                 } else {
-                    i += 1;
+                    i++;
                 }
             }
             
             return items;
-        }
-        
-        function findGuide(cat) {
-            return MARGINS[cat] || null;
         }
         
         function processInvoice() {
@@ -312,7 +328,7 @@
             const items = parseInvoice(invoiceData);
             
             if (items.length === 0) {
-                resultsDiv.innerHTML = '<div style="color: red;">❌ No items parsed</div>';
+                resultsDiv.innerHTML = '<div style="color: red;">❌ No items parsed. Check format.</div>';
                 return;
             }
             
@@ -320,7 +336,7 @@
             const violations = [];
             
             for (const item of items) {
-                const guide = findGuide(item.category);
+                const guide = MARGINS[item.category];
                 if (!guide) continue;
                 
                 if (item.margin >= guide.min && item.margin <= guide.max) {
@@ -328,13 +344,13 @@
                 } else {
                     critical++;
                     const targetMargin = (guide.min + guide.max) / 2;
-                    const cost = item.retail - (item.retail * (item.margin / 100));
-                    const suggestedRetail = cost / (1 - (targetMargin / 100));
+                    const suggestedRetail = item.caseCost / (1 - (targetMargin / 100));
                     
                     violations.push({
                         product: item.product,
                         category: item.category,
                         units: item.units,
+                        upc: item.upc,
                         retail: item.retail.toFixed(2),
                         margin: item.margin.toFixed(2),
                         target: `${guide.min}-${guide.max}%`,
@@ -432,31 +448,13 @@
             report += `VIOLATIONS DETAILS:\n`;
             report += `==================\n\n`;
             
-            const invoiceText = document.getElementById('invoiceData').value;
-            const lines = invoiceText.split('\n');
-            const upcMap = {};
-            
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                const upcMatch = line.match(/(\d{8,})/);
-                if (upcMatch) {
-                    const upc = upcMatch[1];
-                    if (i > 0) {
-                        const productLine = lines[i - 1].trim();
-                        upcMap[productLine] = upc;
-                    }
-                }
-            }
-            
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
                 if (cells.length >= 7) {
                     const productName = cells[0].textContent.trim();
-                    const upc = upcMap[productName] || 'N/A';
                     
                     report += `Product: ${productName}\n`;
-                    report += `UPC: ${upc}\n`;
                     report += `Category: ${cells[1].textContent}\n`;
                     report += `Units: ${cells[2].textContent}\n`;
                     report += `Current Price: ${cells[3].textContent}\n`;
@@ -474,10 +472,9 @@
             const report = generateReport();
             if (!report) return;
             
-            const htmlReport = convertToHTML(report);
             const vendor = document.getElementById('vendor').value.trim() || 'Invoice';
             const subject = `Invoice Margin Violations - ${vendor}`;
-            const body = encodeURIComponent(htmlReport);
+            const body = encodeURIComponent(report);
             
             window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${body}`;
         }
@@ -488,53 +485,6 @@
             
             const message = encodeURIComponent(report);
             window.open(`https://wa.me/?text=${message}`, '_blank');
-        }
-        
-        function convertToHTML(report) {
-            const lines = report.split('\n');
-            let html = '<html><body style="font-family: Arial, sans-serif; line-height: 1.6;">';
-            html += '<pre style="white-space: pre-wrap; word-wrap: break-word;">';
-            
-            let inViolationSection = false;
-            let currentProduct = '';
-            let bgColor = 'transparent';
-            
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                
-                if (line.includes('VIOLATIONS DETAILS')) {
-                    inViolationSection = true;
-                    html += line + '\n';
-                    continue;
-                }
-                
-                if (inViolationSection) {
-                    if (line.startsWith('Product:')) {
-                        currentProduct = line;
-                        if (i + 3 < lines.length && lines[i + 3].includes('Suggested Price:')) {
-                            const suggestedLine = lines[i + 3];
-                            if (suggestedLine.includes('(+$')) {
-                                bgColor = '#ffcccc';
-                            } else if (suggestedLine.includes('(-$')) {
-                                bgColor = '#ffe0b2';
-                            }
-                        }
-                        html += `<span style="background-color: ${bgColor};">${line}</span>\n`;
-                    } else if (line === '---' || line === '') {
-                        bgColor = 'transparent';
-                        html += line + '\n';
-                    } else if (bgColor !== 'transparent') {
-                        html += `<span style="background-color: ${bgColor};">${line}</span>\n`;
-                    } else {
-                        html += line + '\n';
-                    }
-                } else {
-                    html += line + '\n';
-                }
-            }
-            
-            html += '</pre></body></html>';
-            return html;
         }
     </script>
 </body>
