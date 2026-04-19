@@ -441,11 +441,35 @@
             report += `VIOLATIONS DETAILS:\n`;
             report += `==================\n\n`;
             
+            // Get invoice data from textarea
+            const invoiceText = document.getElementById('invoiceData').value;
+            const lines = invoiceText.split('\n');
+            const upcMap = {};
+            
+            // Build UPC map from invoice text
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                // Look for UPC pattern (8+ digits)
+                const upcMatch = line.match(/(\d{8,})/);
+                if (upcMatch) {
+                    const upc = upcMatch[1];
+                    // Previous line is usually the product name
+                    if (i > 0) {
+                        const productLine = lines[i - 1].trim();
+                        upcMap[productLine] = upc;
+                    }
+                }
+            }
+            
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
                 if (cells.length >= 7) {
-                    report += `Product: ${cells[0].textContent}\n`;
+                    const productName = cells[0].textContent.trim();
+                    const upc = upcMap[productName] || 'N/A';
+                    
+                    report += `Product: ${productName}\n`;
+                    report += `UPC: ${upc}\n`;
                     report += `Category: ${cells[1].textContent}\n`;
                     report += `Units: ${cells[2].textContent}\n`;
                     report += `Current Price: ${cells[3].textContent}\n`;
