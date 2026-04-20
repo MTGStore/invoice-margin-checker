@@ -187,11 +187,29 @@
         
         function parseInvoiceText(text) {
             const items = [];
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 3);
+            let lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            
+            // RECONSTRUCT broken lines (PDFs split "Beatbox Strawberry Kiwi" into 3 lines)
+            const reconstructed = [];
+            let buffer = '';
+            
+            for (let line of lines) {
+                // If line is short and next line looks like product continuation, join them
+                if (buffer && (line.length < 20 && !line.match(/^\d+\.\d+/) && !line.includes('%') && !line.includes('$'))) {
+                    buffer += ' ' + line;
+                } else {
+                    if (buffer) reconstructed.push(buffer);
+                    buffer = line.length < 20 && line.match(/^[A-Z]/) ? line : line;
+                }
+            }
+            if (buffer) reconstructed.push(buffer);
+            
+            lines = reconstructed.filter(l => l && l.length > 3);
             
             const headerKeywords = [
                 'Case Name', 'Dept', 'Qty', 'EDI', 'SRP', 'Item', 'Retail', 'Units', 'Case', 'Cost', 
-                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed', 'GROCERY'
+                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed', 'GROCERY',
+                'Printed on', 'CStorePro'
             ];
             
             let i = 0;
@@ -200,8 +218,8 @@
                 
                 if (!line || line.length < 4) { i++; continue; }
                 if (headerKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase()))) { i++; continue; }
-                if (line.match(/^\d+(\s|$)/)) { i++; continue; }
-                if (line.match(/\$[\d.]+/) && line.includes('%')) { i++; continue; }
+                if (line.match(/^\d{8,}/) || line.match(/^\d+\.\d+\s*$/)) { i++; continue; }  // UPC or just numbers
+                if (line.match(/\$[\d.]+/) && line.includes('%') && line.length < 100) { i++; continue; }  // Data line
                 
                 const productName = line;
                 let category = null;
@@ -209,21 +227,25 @@
                 let caseRetail = null;
                 let caseCost = null;
                 
-                for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
+                // Search next 25 lines for category and data
+                for (let j = i + 1; j < Math.min(i + 25, lines.length); j++) {
                     const nextLine = lines[j];
                     if (!nextLine) continue;
                     
                     if (headerKeywords.some(kw => nextLine.toLowerCase().includes(kw.toLowerCase()))) continue;
                     
+                    // Extract category
                     if (!category) {
                         for (let key of Object.keys(MARGINS)) {
-                            if (nextLine.toLowerCase().includes(key.toLowerCase())) {
+                            if (nextLine.toLowerCase() === key.toLowerCase() || 
+                                (nextLine.toLowerCase().includes(key.toLowerCase()) && nextLine.length < 50 && !nextLine.includes('$'))) {
                                 category = key;
                                 break;
                             }
                         }
                     }
                     
+                    // Extract data (prices + margin%)
                     if (nextLine.includes('%') && nextLine.match(/\$[\d.]+/)) {
                         const prices = nextLine.match(/\$[\d.,]+/g) || [];
                         const margins = nextLine.match(/(\d+\.\d+)%/g) || [];
@@ -234,13 +256,13 @@
                                 caseRetail = priceValues[0];
                                 caseCost = priceValues[1];
                                 invoiceMargin = parseFloat(margins[margins.length - 1]);
-                                break;
+                                if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
                             } catch (e) {}
                         }
                     }
                 }
                 
-                if (category && invoiceMargin && caseRetail && caseCost && caseRetail > caseCost) {
+                if (category && invoiceMargin && caseRetail && caseCost && caseRetail > caseCost && invoiceMargin > 0) {
                     const guide = MARGINS[category];
                     let status = 'ok';
                     if (invoiceMargin < guide.min) status = 'low';
