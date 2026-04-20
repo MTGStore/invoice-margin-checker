@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDI Invoice Margin Checker</title>
+    <title>PDF Invoice Margin Checker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -12,63 +13,82 @@
             min-height: 100vh; 
             padding: 20px; 
         }
-        .container { max-width: 1400px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
         .header { text-align: center; color: white; margin-bottom: 30px; }
         .header h1 { font-size: 36px; margin-bottom: 10px; }
         .content { display: grid; grid-template-columns: 1fr; gap: 20px; }
         .card { background: white; border-radius: 8px; padding: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
         .card h2 { color: #667eea; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
-        .form-group { margin-bottom: 20px; display: inline-block; margin-right: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; font-size: 13px; }
-        input, select { padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; }
-        button { padding: 14px 30px; background: #667eea; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 16px; margin-top: 20px; }
-        button:hover { background: #5568d3; }
-        .violations-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 20px; }
-        .violations-table th { background: #667eea; color: white; padding: 12px; text-align: left; font-weight: 600; }
-        .violations-table td { padding: 12px; border: 1px solid #ddd; }
-        .violations-table tr:nth-child(even) { background: #f9f9f9; }
+        .upload-area { 
+            border: 2px dashed #667eea; 
+            border-radius: 8px; 
+            padding: 40px; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.3s;
+            background: #f8f9ff;
+        }
+        .upload-area:hover { background: #f0f2ff; border-color: #5568d3; }
+        .upload-area.dragover { background: #e8ebff; border-color: #3f4fb5; }
+        .upload-area input { display: none; }
+        .upload-text { color: #667eea; font-weight: 600; margin-bottom: 10px; }
+        .upload-sub { color: #999; font-size: 14px; }
+        .loading { display: none; text-align: center; padding: 20px; }
+        .spinner { 
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #667eea; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .summary-box { padding: 20px; border-radius: 4px; text-align: center; font-weight: 600; }
         .summary-ok { background: #e8f5e9; color: #2e7d32; }
         .summary-critical { background: #ffebee; color: #c62828; }
         .summary-box .number { font-size: 40px; font-weight: bold; display: block; margin-bottom: 5px; }
-        .no-violations { padding: 30px; text-align: center; color: #4caf50; font-weight: 600; background: #e8f5e9; border-radius: 4px; margin-top: 20px; font-size: 18px; }
+        .violations-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 20px; }
+        .violations-table th { background: #667eea; color: white; padding: 12px; text-align: left; font-weight: 600; }
+        .violations-table td { padding: 10px; border: 1px solid #ddd; }
+        .violations-table tr:nth-child(even) { background: #f9f9f9; }
         .violations-header { padding: 15px; background: #ffebee; border-left: 4px solid #f44336; margin-top: 20px; border-radius: 4px; font-weight: 600; color: #c62828; }
-        .info-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: #1565c0; }
-        @media (max-width: 1024px) { .content { grid-template-columns: 1fr; } }
+        .info-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; border-radius: 4px; margin-bottom: 20px; color: #1565c0; font-size: 14px; }
+        .error { color: #c62828; padding: 15px; background: #ffebee; border-radius: 4px; }
+        @media (max-width: 1024px) { .summary { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>💰 PDI Invoice Margin Checker</h1>
-            <p>Works with PDI Retail Purchase Invoice Tables</p>
+            <h1>📄 PDF Invoice Margin Checker</h1>
+            <p>Upload your PDI invoice PDF and get instant margin analysis</p>
         </div>
         <div class="content">
             <div class="card">
-                <h2>📋 Invoice Analysis</h2>
+                <h2>📋 Upload Invoice PDF</h2>
                 <div class="info-box">
-                    ✅ <strong>Copy from PDI:</strong> Go to your invoice → Select the table → Copy → Paste below
+                    ✅ <strong>Upload PDF:</strong> Export your PDI invoice as PDF and upload here for automatic analysis
                 </div>
                 
-                <div class="form-group">
-                    <label>Invoice Date (Optional)</label>
-                    <input type="date" id="date">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-text">📁 Drop PDF here or click to upload</div>
+                    <div class="upload-sub">Supports PDI invoice exports (PDF)</div>
+                    <input type="file" id="fileInput" accept=".pdf" />
                 </div>
                 
-                <textarea id="invoiceData" placeholder="Paste the invoice table here..." style="width: 100%; min-height: 300px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Processing PDF...</p>
+                </div>
                 
-                <button onclick="processInvoice()">🔍 Check Margins</button>
-                
-                <h2 style="margin-top: 40px;">📊 Results</h2>
                 <div id="results"></div>
             </div>
         </div>
     </div>
     
     <script>
-        document.getElementById('date').valueAsDate = new Date();
-        
         const MARGINS = {
             'Bakery': { min: 35, max: 42 },
             'Chips': { min: 35, max: 42 },
@@ -99,27 +119,89 @@
             'Wine': { min: 20, max: 25 },
             'HBA': { min: 38, max: 44 },
             'Health': { min: 38, max: 44 },
-            'Auto': { min: 33, max: 38 },
-            'PEG Beer': { min: 25, max: 30 },
-            'Single': { min: 25, max: 30 },
-            'PKG': { min: 20, max: 25 }
+            'Auto': { min: 33, max: 38 }
         };
         
-        function parseInvoiceTable(text) {
+        // Set up PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        async function handleFile(file) {
+            if (file.type !== 'application/pdf') {
+                results.innerHTML = '<div class="error">❌ Please upload a PDF file</div>';
+                return;
+            }
+            
+            loading.style.display = 'block';
+            results.innerHTML = '';
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                let fullText = '';
+                
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+                }
+                
+                const items = parseInvoiceText(fullText);
+                displayResults(items);
+            } catch (error) {
+                results.innerHTML = '<div class="error">❌ Error reading PDF: ' + error.message + '</div>';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        function parseInvoiceText(text) {
             const items = [];
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 2);
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 3);
+            
+            const headerKeywords = [
+                'Case Name', 'Dept', 'Qty', 'EDI', 'SRP', 'Item', 'Retail', 'Units', 'Case', 'Cost', 
+                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed', 'GROCERY'
+            ];
             
             let i = 0;
             while (i < lines.length) {
                 const line = lines[i];
                 
-                // Skip header rows
-                if (line.includes('Case Name') || line.includes('Qty') || line.includes('Unit') || 
-                    line.includes('Case Retail') || line.includes('Invoice') || line.includes('Retailed Item') ||
-                    line.match(/^[0-9]+\s+Retailed\s+Item/) || line.length < 3) {
-                    i++;
-                    continue;
-                }
+                if (!line || line.length < 4) { i++; continue; }
+                if (headerKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase()))) { i++; continue; }
+                if (line.match(/^\d+(\s|$)/)) { i++; continue; }
+                if (line.match(/\$[\d.]+/) && line.includes('%')) { i++; continue; }
                 
                 const productName = line;
                 let category = null;
@@ -127,21 +209,22 @@
                 let caseRetail = null;
                 let caseCost = null;
                 
-                // Look ahead for data
-                for (let j = i + 1; j < Math.min(i + 15, lines.length); j++) {
+                for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
                     const nextLine = lines[j];
+                    if (!nextLine) continue;
+                    
+                    if (headerKeywords.some(kw => nextLine.toLowerCase().includes(kw.toLowerCase()))) continue;
                     
                     if (!category) {
                         for (let key of Object.keys(MARGINS)) {
-                            if (nextLine.includes(key)) {
+                            if (nextLine.toLowerCase().includes(key.toLowerCase())) {
                                 category = key;
                                 break;
                             }
                         }
                     }
                     
-                    if (nextLine.match(/[\d.]+\s+[\d.]+\s+[\d.$]+/) && nextLine.includes('%')) {
-                        const numbers = nextLine.match(/[\d.]+/g) || [];
+                    if (nextLine.includes('%') && nextLine.match(/\$[\d.]+/)) {
                         const prices = nextLine.match(/\$[\d.,]+/g) || [];
                         const margins = nextLine.match(/(\d+\.\d+)%/g) || [];
                         
@@ -157,10 +240,9 @@
                     }
                 }
                 
-                if (category && invoiceMargin && caseRetail && caseCost) {
+                if (category && invoiceMargin && caseRetail && caseCost && caseRetail > caseCost) {
                     const guide = MARGINS[category];
                     let status = 'ok';
-                    
                     if (invoiceMargin < guide.min) status = 'low';
                     else if (invoiceMargin > guide.max) status = 'high';
                     
@@ -181,32 +263,18 @@
             return items;
         }
         
-        function processInvoice() {
-            const invoiceData = document.getElementById('invoiceData').value.trim();
-            const resultsDiv = document.getElementById('results');
-            
-            if (!invoiceData) {
-                resultsDiv.innerHTML = '<div style="color: red; padding: 20px;">❌ Please paste invoice data</div>';
-                return;
-            }
-            
-            const items = parseInvoiceTable(invoiceData);
-            
+        function displayResults(items) {
             if (items.length === 0) {
-                resultsDiv.innerHTML = '<div style="color: red; padding: 20px;">❌ No items found - make sure you pasted the invoice table correctly</div>';
+                results.innerHTML = '<div class="error">❌ No items found in PDF. Check the file format.</div>';
                 return;
             }
             
-            let ok = 0, low = 0, high = 0;
-            const violations = [];
+            let ok = 0, violations = [];
             
             for (const item of items) {
                 if (item.status === 'ok') {
                     ok++;
                 } else {
-                    if (item.status === 'low') low++;
-                    else high++;
-                    
                     const targetMargin = (item.guide.min + item.guide.max) / 2;
                     const suggestedRetail = item.costPrice / (1 - (targetMargin / 100));
                     
@@ -222,40 +290,36 @@
                 }
             }
             
-            if (violations.length === 0) {
-                resultsDiv.innerHTML = `<div class="summary"><div class="summary-box summary-ok"><span class="number">${items.length}</span>ALL OK</div></div><div class="no-violations">✅ All ${items.length} items within margin guidelines!</div>`;
-                return;
-            }
-            
             let html = `<div class="summary">
                 <div class="summary-box summary-ok"><span class="number">${ok}</span>OK</div>
-                <div class="summary-box summary-critical"><span class="number">${low + high}</span>OUT OF RANGE</div>
+                <div class="summary-box summary-critical"><span class="number">${violations.length}</span>OUT OF RANGE</div>
                 <div class="summary-box" style="background: #fff3e0; color: #e65100;"><span class="number">${items.length}</span>TOTAL ITEMS</div>
             </div>`;
             
             if (violations.length > 0) {
                 html += `<div class="violations-header">⚠️ ${violations.length} ITEMS NEED PRICE ADJUSTMENT</div>`;
-                html += `<table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current Margin</th><th>Target Range</th><th>Current Retail</th><th>Suggested Retail</th></tr></thead><tbody>`;
+                html += `<table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current Margin</th><th>Target Range</th><th>Suggested Retail</th></tr></thead><tbody>`;
                 
                 for (const v of violations) {
                     const bgColor = v.status === 'low' ? '#ffcccc' : '#ffe0b2';
                     const borderColor = v.status === 'low' ? '#f44336' : '#ff9800';
-                    const label = v.status === 'low' ? '🔴 RAISE PRICE' : '🟠 LOWER PRICE';
+                    const label = v.status === 'low' ? '🔴 RAISE' : '🟠 LOWER';
                     
                     html += `<tr style="background: ${bgColor}; border-left: 4px solid ${borderColor};">
                         <td><strong>${v.product}</strong></td>
-                        <td><strong>${v.category}</strong></td>
+                        <td>${v.category}</td>
                         <td><strong>${v.margin}%</strong></td>
                         <td>${v.target}</td>
-                        <td>$${v.current}</td>
                         <td style="font-weight: 600; color: #c62828;">$${v.suggested} ${label}</td>
                     </tr>`;
                 }
                 
                 html += '</tbody></table>';
+            } else {
+                html += '<div style="padding: 30px; text-align: center; color: #4caf50; font-weight: 600; background: #e8f5e9; border-radius: 4px; margin-top: 20px; font-size: 16px;">✅ All items within margin guidelines!</div>';
             }
             
-            resultsDiv.innerHTML = html;
+            results.innerHTML = html;
         }
     </script>
 </body>
