@@ -172,11 +172,16 @@
                         
                         if (prices.length >= 2 && margins.length > 0) {
                             try {
-                                const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, ''))).sort((a,b) => b-a);
-                                caseRetail = priceValues[0];
-                                caseCost = priceValues[1];
-                                invoiceMargin = parseFloat(margins[margins.length - 1]);
-                                if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
+                                const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, '')));
+                                // PDI format: Item Retail, Case Retail, Case Cost, Discount, Invoice Totals
+                                // We want: Case Retail (retail price) and Invoice Totals (actual cost charged)
+                                // prices[0]=Item Retail, prices[1]=Case Retail, prices[2]=Case Cost, prices[3]=Discount, prices[4]=Invoice Totals
+                                if (priceValues.length >= 3) {
+                                    caseRetail = priceValues[1]; // Case Retail
+                                    caseCost = priceValues[4] || priceValues[2]; // Invoice Totals (actual) or Case Cost
+                                    invoiceMargin = parseFloat(margins[margins.length - 1]);
+                                    if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
+                                }
                             } catch (e) {}
                         }
                     }
