@@ -169,15 +169,24 @@
                     if (nextLine.includes('%') && nextLine.match(/\$[\d.]+/)) {
                         const prices = nextLine.match(/\$[\d.,]+/g) || [];
                         const margins = nextLine.match(/(\d+\.\d+)%/g) || [];
+                        const numbers = nextLine.match(/[\d.]+/g) || [];
                         
-                        if (prices.length >= 3 && margins.length > 0) {
+                        if (prices.length >= 3 && margins.length > 0 && numbers.length >= 2) {
                             try {
                                 const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, '')));
-                                // PDI format: Item Retail, Case Retail, Case Cost, Discount, Invoice Totals
+                                // PDI format: Qty, Item Retail, Units Per Case, Case Retail, Case Cost, Discount, Invoice Totals
+                                // numbers[0]=Qty, numbers[1]=Units Per Case
+                                const unitsPerCase = parseFloat(numbers[1]) || 1;
+                                
                                 // prices[0]=Item Retail, prices[1]=Case Retail, prices[2]=Case Cost
-                                caseRetail = priceValues[1]; // Case Retail - what we charge customers
-                                caseCost = priceValues[2];   // Case Cost - what we paid
+                                const itemRetail = priceValues[0];      // Single unit selling price
+                                const caseCost = priceValues[2];        // Cost for entire case
+                                const costPerUnit = caseCost / unitsPerCase;  // Cost per single unit
+                                
+                                caseRetail = itemRetail;               // Use Item Retail (single unit price)
+                                caseCost = costPerUnit;                // Use per-unit cost
                                 invoiceMargin = parseFloat(margins[margins.length - 1]);
+                                
                                 if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
                             } catch (e) {}
                         }
