@@ -121,19 +121,19 @@
                     
                     if (dataLine && category !== 'Other') {
                         const prices = dataLine.match(/\$[\d.]+/g) || [];
-                        const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
                         const qtyMatch = dataLine.match(/^([\d.]+)/);
+                        const marginMatch = dataLine.match(/(\d+\.\d+)%\s*$/);
                         
-                        if (prices.length >= 5 && margins.length > 0 && qtyMatch) {
+                        if (prices.length >= 5 && marginMatch && qtyMatch) {
                             const qty = parseFloat(qtyMatch[1]);
                             const itemRetailTotal = parseFloat(prices[1].replace('$', ''));
                             const caseRetailTotal = parseFloat(prices[4].replace('$', ''));
-                            const marginPercent = parseFloat(margins[0]);
+                            const marginPercent = parseFloat(marginMatch[1]);
                             
                             const perUnitRetail = itemRetailTotal / qty;
                             const perUnitCost = caseRetailTotal / qty;
                             
-                            if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0) {
+                            if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0 && marginPercent < 100) {
                                 const guide = MARGINS[category];
                                 let priceStatus = 'ok';
                                 
