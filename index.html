@@ -3,23 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice Margin Checker - Beverage Edition</title>
+    <title>Universal Invoice Margin Checker</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
         .container { max-width: 1600px; margin: 0 auto; }
         .header { text-align: center; color: white; margin-bottom: 30px; }
         .header h1 { font-size: 36px; margin-bottom: 10px; }
+        .header p { font-size: 14px; opacity: 0.9; }
         .content { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
         .card { background: white; border-radius: 8px; padding: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
         .card h2 { color: #667eea; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
         .form-group { margin-bottom: 20px; }
         label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; font-size: 13px; }
-        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; }
-        input:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
         textarea { resize: vertical; min-height: 400px; font-family: 'Courier New', monospace; font-size: 12px; }
         button { width: 100%; padding: 16px; background: #667eea; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 16px; margin-top: 20px; }
         button:hover { background: #5568d3; }
+        .btn-secondary { background: #ea4335; margin-top: 10px; }
+        .btn-secondary:hover { background: #c5221f; }
+        .btn-success { background: #25d366; margin-top: 10px; }
+        .btn-success:hover { background: #1ea952; }
         .violations-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 20px; }
         .violations-table th { background: #667eea; color: white; padding: 12px; text-align: left; font-weight: 600; }
         .violations-table td { padding: 12px; border: 1px solid #ddd; }
@@ -31,21 +41,31 @@
         .summary-ok { background: #e8f5e9; color: #2e7d32; }
         .summary-critical { background: #ffebee; color: #c62828; }
         .summary-box .number { font-size: 32px; font-weight: bold; }
+        .vendor-note { background: #fff3cd; padding: 12px; border-radius: 4px; margin-top: 15px; font-size: 13px; color: #856404; }
         @media (max-width: 1024px) { .content { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>💰 Invoice Margin Checker</h1>
-            <p>Works with Coke, Pepsi, and all beverage formats</p>
+            <h1>💰 Universal Invoice Margin Checker</h1>
+            <p>Works with Coke, Pepsi, Red Bull, Tobacco, Frito-Lay, Beer, and all vendors</p>
         </div>
         <div class="content">
             <div class="card">
-                <h2>📋 Paste Invoice Data</h2>
+                <h2>📋 Invoice Data</h2>
                 <div class="form-group">
                     <label>Vendor</label>
-                    <input type="text" id="vendor" placeholder="e.g., Coke, Pepsi">
+                    <select id="vendor">
+                        <option value="">-- Auto-Detect Vendor --</option>
+                        <option value="Coke">Coke / Coca-Cola</option>
+                        <option value="Pepsi">Pepsi / Gatorade</option>
+                        <option value="RedBull">Red Bull</option>
+                        <option value="Tobacco">Tobacco / Cigars / Dip</option>
+                        <option value="FritoLay">Frito-Lay / Chips</option>
+                        <option value="Beer">Beer / Alcohol</option>
+                        <option value="Other">Other Vendor</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Invoice Date</label>
@@ -53,8 +73,11 @@
                 </div>
                 <textarea id="invoiceData" placeholder="Paste invoice data here"></textarea>
                 <button onclick="processInvoice()">🔍 Check Margins</button>
-                <button onclick="exportToEmail()" style="background: #ea4335; margin-top: 10px;">📧 Export Email</button>
-                <button onclick="exportToWhatsApp()" style="background: #25d366; margin-top: 10px;">💬 Share WhatsApp</button>
+                <button class="btn-secondary" onclick="exportToEmail()">📧 Export Email</button>
+                <button class="btn-success" onclick="exportToWhatsApp()">💬 Share WhatsApp</button>
+                <div class="vendor-note">
+                    <strong>Tip:</strong> Select vendor for better accuracy, or leave as "Auto-Detect" and the tool will guess based on content.
+                </div>
             </div>
             
             <div class="card">
@@ -70,109 +93,154 @@
         const MARGINS = {
             'Bakery': { min: 35, max: 42 },
             'Chips/Salty': { min: 35, max: 42 },
+            'Chips': { min: 35, max: 42 },
+            'Snacks': { min: 35, max: 42 },
             'Candy': { min: 35, max: 42 },
             'Soda': { min: 36, max: 44 },
             'Non Alcohol': { min: 36, max: 44 },
+            'Non-Tax Grocery': { min: 36, max: 44 },
+            'Non Tax Grocery': { min: 36, max: 44 },
             'TH Non Alcohol': { min: 20, max: 25 },
             'Energy drink': { min: 38, max: 45 },
             'Water/FL Water': { min: 42, max: 48 },
-            'Frozen/Ice Cream': { min: 38, max: 45 }
+            'Frozen/Ice Cream': { min: 38, max: 45 },
+            'Isotonic': { min: 38, max: 45 },
+            'Cig Pack': { min: 8, max: 15 },
+            'Cig Carton': { min: 7, max: 10 },
+            'Cigar/Leaf': { min: 26, max: 35 },
+            'E-Cigs': { min: 18, max: 25 },
+            'Dip Can': { min: 18, max: 23 },
+            'Dip Roll/Tobacco': { min: 14, max: 18 },
+            'Tobacco': { min: 14, max: 18 },
+            'Nicotine Pouches': { min: 18, max: 24 },
+            'Single Beer': { min: 25, max: 30 },
+            'PKG Beer': { min: 20, max: 25 },
+            'Beer': { min: 20, max: 30 },
+            'Wine': { min: 20, max: 25 },
+            'Novelty-Other': { min: 50, max: 60 },
+            'Novelty-Vape': { min: 45, max: 55 },
+            'Novelty-Merch': { min: 50, max: 60 },
+            'Health/Hygiene': { min: 38, max: 44 },
+            'HBA': { min: 38, max: 44 },
+            'Auto': { min: 33, max: 38 },
+            'Cold Food': { min: 35, max: 42 },
+            'Grocery': { min: 33, max: 38 },
+            'CIGARETTE PK': { min: 8, max: 15 },
+            'PKG Bakery': { min: 35, max: 42 },
+            'Wine': { min: 20, max: 25 }
         };
+        
+        function detectVendor(text) {
+            const upper = text.toUpperCase();
+            if (upper.includes('REDBULL') || upper.includes('RED BULL')) return 'RedBull';
+            if (upper.includes('PEPSI') || upper.includes('GATORADE') || upper.includes('MOUNTAIN DEW') || upper.includes('ALANI')) return 'Pepsi';
+            if (upper.includes('COKE') || upper.includes('SPRITE') || upper.includes('FANTA') || upper.includes('MONSTER') || upper.includes('MINUTE MAID')) return 'Coke';
+            if (upper.includes('MARLBORO') || upper.includes('CIGARETTE') || upper.includes('GRIZZLY') || upper.includes('COPENHAGEN') || upper.includes('SKOAL') || upper.includes('NICOTINE POUCH')) return 'Tobacco';
+            if (upper.includes('DORITOS') || upper.includes('FRITO') || upper.includes('LAYS') || upper.includes('CHEETOS')) return 'FritoLay';
+            if (upper.includes('BUD') || upper.includes('BEER') || upper.includes('WINE') || upper.includes('MICHELOB') || upper.includes('COORS')) return 'Beer';
+            return 'Other';
+        }
         
         function parseInvoice(text) {
             const items = [];
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 2);
             let i = 0;
             
             while (i < lines.length) {
                 const productName = lines[i];
                 
-                // Look for UPC (8+ digits)
-                if (i + 1 < lines.length && /^\d{8,}/.test(lines[i + 1])) {
-                    const upc = lines[i + 1];
-                    let category = 'Other';
+                // Look for data patterns - UPC or price data
+                let category = null;
+                let dataLine = null;
+                
+                // Scan next 20 lines for category and data
+                for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
+                    const line = lines[j];
                     
-                    // Find category (next few lines)
-                    for (let j = i + 2; j < Math.min(i + 6, lines.length); j++) {
-                        const line = lines[j];
-                        // Match category like "Non Alcohol", "Soda", etc
-                        if (line.match(/^[A-Z][a-z\s\/]+$/) && !line.includes('$') && !line.includes('%')) {
-                            category = line.trim();
-                            break;
-                        }
-                    }
-                    
-                    // Find data line (contains $ and %)
-                    let dataLine = null;
-                    for (let j = i + 3; j < Math.min(i + 15, lines.length); j++) {
-                        if (lines[j].includes('$') && lines[j].includes('%')) {
-                            dataLine = lines[j];
-                            break;
-                        }
-                    }
-                    
-                    if (dataLine && category !== 'Other') {
-                        // Extract numbers: Qty, Retail, Case Retail, Margin
-                        const numbers = dataLine.match(/[\d.]+/g) || [];
-                        const prices = dataLine.match(/\$[\d.]+/g) || [];
-                        const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
-                        
-                        if (numbers.length >= 4 && prices.length >= 2 && margins.length > 0) {
-                            const qty = parseFloat(numbers[0]);
-                            const marginPercent = parseFloat(margins[margins.length - 1]);
-                            
-                            // Get the two largest prices (Retail and Cost)
-                            const priceValues = prices.map(p => parseFloat(p.replace('$', ''))).sort((a,b) => b-a);
-                            const itemRetail = priceValues[0];
-                            const caseRetail = priceValues[Math.min(1, priceValues.length-1)];
-                            
-                            const perUnitRetail = itemRetail / qty;
-                            const perUnitCost = caseRetail / qty;
-                            
-                            if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0 && marginPercent < 100) {
-                                const guide = MARGINS[category];
-                                let status = 'ok';
-                                
-                                if (guide) {
-                                    if (marginPercent < guide.min) status = 'low';
-                                    else if (marginPercent > guide.max) status = 'high';
-                                }
-                                
-                                items.push({
-                                    product: productName.substring(0, 50),
-                                    category: category,
-                                    retail: perUnitRetail,
-                                    margin: marginPercent,
-                                    cost: perUnitCost,
-                                    status: status,
-                                    guide: guide
-                                });
+                    // Check if this is category line - match ANY MARGINS key that appears in the line
+                    if (!category && !line.includes('$') && !line.includes('%') && line.length < 80) {
+                        for (let key of Object.keys(MARGINS)) {
+                            if (line.includes(key)) {
+                                category = key;  // Use the actual MARGINS key, not the line text
+                                break;
                             }
                         }
                     }
-                    i++;
-                } else {
-                    i++;
+                    
+                    // Check for data line (contains $ and %)
+                    if (line.includes('$') && line.includes('%') && line.match(/[\d.]+%/)) {
+                        dataLine = line;
+                        break;
+                    }
                 }
+                
+                // Parse if we have category and data
+                if (dataLine && category) {
+                    const numbers = dataLine.match(/[\d.]+/g) || [];
+                    const prices = dataLine.match(/\$[\d.]+/g) || [];
+                    const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
+                    
+                    if (numbers.length >= 3 && prices.length >= 1 && margins.length > 0) {
+                        const qty = parseFloat(numbers[0]);
+                        const marginPercent = parseFloat(margins[margins.length - 1]);
+                        
+                        // Get prices in order they appear
+                        const priceValues = prices.map(p => parseFloat(p.replace('$', ''))).sort((a,b) => b-a);
+                        
+                        // Determine retail and cost
+                        let itemRetail, caseRetail;
+                        if (priceValues.length >= 2) {
+                            itemRetail = priceValues[0];
+                            caseRetail = priceValues[1];
+                        } else {
+                            itemRetail = priceValues[0];
+                            caseRetail = priceValues[0];
+                        }
+                        
+                        const perUnitRetail = itemRetail / qty;
+                        const perUnitCost = caseRetail / qty;
+                        
+                        if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0 && marginPercent < 200) {
+                            const guide = MARGINS[category];
+                            let status = 'ok';
+                            
+                            if (guide) {
+                                if (marginPercent < guide.min) status = 'low';
+                                else if (marginPercent > guide.max) status = 'high';
+                            }
+                            
+                            items.push({
+                                product: productName.substring(0, 60),
+                                category: category,
+                                retail: perUnitRetail,
+                                margin: marginPercent,
+                                cost: perUnitCost,
+                                status: status,
+                                guide: guide
+                            });
+                        }
+                    }
+                }
+                i++;
             }
             
             return items;
         }
         
         function processInvoice() {
-            const vendor = document.getElementById('vendor').value.trim();
+            const vendor = document.getElementById('vendor').value || detectVendor(document.getElementById('invoiceData').value);
             const invoiceData = document.getElementById('invoiceData').value.trim();
             const resultsDiv = document.getElementById('results');
             
             if (!invoiceData) {
-                resultsDiv.innerHTML = '<div style="color: red;">❌ Paste invoice data</div>';
+                resultsDiv.innerHTML = '<div style="color: red; padding: 20px;">❌ Please paste invoice data</div>';
                 return;
             }
             
             const items = parseInvoice(invoiceData);
             
             if (items.length === 0) {
-                resultsDiv.innerHTML = '<div style="color: red;">❌ No items parsed</div>';
+                resultsDiv.innerHTML = '<div style="color: red; padding: 20px;">❌ No items parsed - invoice format not recognized</div>';
                 return;
             }
             
@@ -198,7 +266,8 @@
                         margin: item.margin.toFixed(2),
                         target: `${item.guide.min}-${item.guide.max}%`,
                         suggested: suggestedRetail.toFixed(2),
-                        status: item.status
+                        status: item.status,
+                        vendor: vendor
                     });
                 }
             }
@@ -208,7 +277,7 @@
                 return;
             }
             
-            let html = `<div class="summary"><div class="summary-box summary-ok"><div class="number">${ok}</div>OK</div><div class="summary-box summary-critical"><div class="number">${low + high}</div>VIOLATIONS</div></div><div class="violations-header">⚠️ ${violations.length} VIOLATIONS</div><table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current</th><th>Margin</th><th>Target</th><th>Suggested</th></tr></thead><tbody>`;
+            let html = `<div class="summary"><div class="summary-box summary-ok"><div class="number">${ok}</div>OK</div><div class="summary-box summary-critical"><div class="number">${low + high}</div>VIOLATIONS</div></div><div class="violations-header">⚠️ ${violations.length} ITEMS OUT OF RANGE</div><table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current</th><th>Margin</th><th>Target</th><th>Suggested</th></tr></thead><tbody>`;
             
             for (const v of violations) {
                 const bgColor = v.status === 'low' ? '#ffcccc' : '#ffe0b2';
@@ -218,36 +287,39 @@
             
             html += '</tbody></table>';
             resultsDiv.innerHTML = html;
+            
+            // Store for export
+            window.lastViolations = violations;
+            window.lastVendor = vendor;
         }
         
         function generateReport() {
-            const vendor = document.getElementById('vendor').value.trim() || 'Unknown';
-            const resultsDiv = document.getElementById('results');
-            const table = resultsDiv.querySelector('table');
-            if (!table) return null;
-            
+            if (!window.lastViolations) return null;
+            const vendor = window.lastVendor || 'Unknown';
             let report = `INVOICE MARGIN VIOLATIONS\n========================\nVendor: ${vendor}\nDate: ${new Date().toLocaleString()}\n\n`;
-            const rows = table.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 6) {
-                    report += `${cells[0].textContent.trim()} | ${cells[1].textContent} | $${cells[2].textContent} → $${cells[5].textContent}\n`;
-                }
+            window.lastViolations.forEach(v => {
+                report += `${v.product} | ${v.category} | $${v.retail} → $${v.suggested}\n`;
             });
             return report;
         }
         
         function exportToEmail() {
             const report = generateReport();
-            if (!report) return;
-            const vendor = document.getElementById('vendor').value.trim() || 'Invoice';
+            if (!report) {
+                alert('Please check margins first');
+                return;
+            }
+            const vendor = window.lastVendor || 'Invoice';
             const subject = `Invoice Violations - ${vendor}`;
             window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(report)}`;
         }
         
         function exportToWhatsApp() {
             const report = generateReport();
-            if (!report) return;
+            if (!report) {
+                alert('Please check margins first');
+                return;
+            }
             window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
         }
     </script>
