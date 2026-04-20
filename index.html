@@ -132,7 +132,7 @@
             
             const headerKeywords = [
                 'Case Name', 'Dept', 'Qty', 'EDI', 'SRP', 'Item', 'Retail', 'Units', 'Case', 'Cost', 
-                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed', 'GROCERY'
+                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed'
             ];
             
             let i = 0;
@@ -141,8 +141,8 @@
                 
                 if (!line || line.length < 4) { i++; continue; }
                 if (headerKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase()))) { i++; continue; }
-                if (line.match(/^\d{8,}/) || line.match(/^\d+\.\d+\s*$/)) { i++; continue; }
-                if (line.match(/\$[\d.]+/) && line.includes('%') && line.length < 100) { i++; continue; }
+                if (line.match(/^\d{8,}/)) { i++; continue; }  // Skip EDI codes
+                if (line.match(/^[0-9.]+$/) && line.split('.').length < 3) { i++; continue; }  // Skip pure numbers
                 
                 const productName = line;
                 let category = null;
@@ -156,10 +156,9 @@
                     
                     if (headerKeywords.some(kw => nextLine.toLowerCase().includes(kw.toLowerCase()))) continue;
                     
-                    if (!category) {
+                    if (!category && (nextLine.toLowerCase().includes('grocery') || nextLine.match(/^[A-Z][a-z\s-]+$/) || Object.keys(MARGINS).some(k => nextLine.toLowerCase().includes(k.toLowerCase())))) {
                         for (let key of Object.keys(MARGINS)) {
-                            if (nextLine.toLowerCase() === key.toLowerCase() || 
-                                (nextLine.toLowerCase().includes(key.toLowerCase()) && nextLine.length < 50 && !nextLine.includes('$'))) {
+                            if (nextLine.toLowerCase() === key.toLowerCase() || nextLine.toLowerCase().includes(key.toLowerCase())) {
                                 category = key;
                                 break;
                             }
@@ -174,17 +173,14 @@
                         if (prices.length >= 3 && margins.length > 0 && numbers.length >= 2) {
                             try {
                                 const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, '')));
-                                // PDI format: Qty, Item Retail, Units Per Case, Case Retail, Case Cost, Discount, Invoice Totals
-                                // numbers[0]=Qty, numbers[1]=Units Per Case
                                 const unitsPerCase = parseFloat(numbers[1]) || 1;
                                 
-                                // prices[0]=Item Retail, prices[1]=Case Retail, prices[2]=Case Cost
-                                const itemRetail = priceValues[0];      // Single unit selling price
-                                const caseCost = priceValues[2];        // Cost for entire case
-                                const costPerUnit = caseCost / unitsPerCase;  // Cost per single unit
+                                const itemRetail = priceValues[0];
+                                const caseCost = priceValues[2];
+                                const costPerUnit = caseCost / unitsPerCase;
                                 
-                                caseRetail = itemRetail;               // Use Item Retail (single unit price)
-                                caseCost = costPerUnit;                // Use per-unit cost
+                                caseRetail = itemRetail;
+                                caseCost = costPerUnit;
                                 invoiceMargin = parseFloat(margins[margins.length - 1]);
                                 
                                 if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
@@ -261,7 +257,7 @@
             
             if (violations.length > 0) {
                 html += `<div class="violations-header">⚠️ ${violations.length} ITEMS NEED PRICE ADJUSTMENT</div>`;
-                html += `<table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current Margin</th><th>Target Range</th><th>Suggested Retail</th></tr></thead><tbody>`;
+                html += `<table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current Retail</th><th>Current Margin</th><th>Target Range</th><th>Suggested Retail</th></tr></thead><tbody>`;
                 
                 for (const v of violations) {
                     const bgColor = v.status === 'low' ? '#ffcccc' : '#ffe0b2';
@@ -271,6 +267,7 @@
                     html += `<tr style="background: ${bgColor}; border-left: 4px solid ${borderColor};">
                         <td><strong>${v.product}</strong></td>
                         <td>${v.category}</td>
+                        <td>$${v.current}</td>
                         <td><strong>${v.margin}%</strong></td>
                         <td>${v.target}</td>
                         <td style="font-weight: 600; color: #c62828;">$${v.suggested} ${label}</td>
