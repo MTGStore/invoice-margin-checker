@@ -144,12 +144,24 @@
         function parseInvoice(text) {
             const items = [];
             const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 2);
-            let i = 0;
             
+            // Skip header/summary lines (these are known invoice header/footer text)
+            const skipWords = ['Item', 'Retailed', 'Total Discount', 'Invoice Total', 'Invoice Margin', 
+                             'Total Rebate', 'Margin After', 'Case Name', 'Dept.', 'Name', 'Qty', 'EDI', 'SRP', 
+                             'Units', 'Per Case', 'Case Retail', 'Case Cost', 'Discount', 'Invoice Totals', 
+                             'Rebate', '74 Retailed', '15 Retailed', '30 Retailed', '33 Retailed', '66 Retailed',
+                             '207 Retailed'];
+            
+            let i = 0;
             while (i < lines.length) {
                 const productName = lines[i];
                 
-                // Look for data patterns - UPC or price data
+                // SKIP header/footer lines
+                if (skipWords.some(word => productName.includes(word)) || productName.includes('GROCERY') || productName.length < 3) {
+                    i++;
+                    continue;
+                }
+                
                 let category = null;
                 let dataLine = null;
                 
@@ -157,20 +169,29 @@
                 for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
                     const line = lines[j];
                     
-                    // Check if this is category line - match ANY MARGINS key that appears in the line
+                    // Skip GROCERY lines
+                    if (line.includes('GROCERY')) {
+                        continue;
+                    }
+                    
+                    // Check if this is category line - match ANY MARGINS key
                     if (!category && !line.includes('$') && !line.includes('%') && line.length < 80) {
                         for (let key of Object.keys(MARGINS)) {
                             if (line.includes(key)) {
-                                category = key;  // Use the actual MARGINS key, not the line text
+                                category = key;
                                 break;
                             }
                         }
                     }
                     
-                    // Check for data line (contains $ and %)
-                    if (line.includes('$') && line.includes('%') && line.match(/[\d.]+%/)) {
-                        dataLine = line;
-                        break;
+                    // Check for data line (contains $ and % with actual margin data)
+                    if (line.includes('$') && line.includes('%') && line.match(/[\d.]+%/) && !line.includes('GROCERY')) {
+                        // Make sure this line has actual product data (multiple prices)
+                        const priceCount = (line.match(/\$/g) || []).length;
+                        if (priceCount >= 2) {  // Real data has multiple prices
+                            dataLine = line;
+                            break;
+                        }
                     }
                 }
                 
@@ -180,27 +201,22 @@
                     const prices = dataLine.match(/\$[\d.]+/g) || [];
                     const margins = dataLine.match(/(\d+\.\d+)%/g) || [];
                     
-                    if (numbers.length >= 3 && prices.length >= 1 && margins.length > 0) {
+                    if (numbers.length >= 3 && prices.length >= 2 && margins.length > 0) {
                         const qty = parseFloat(numbers[0]);
                         const marginPercent = parseFloat(margins[margins.length - 1]);
                         
-                        // Get prices in order they appear
+                        // Get prices (sorted descending)
                         const priceValues = prices.map(p => parseFloat(p.replace('$', ''))).sort((a,b) => b-a);
-                        
-                        // Determine retail and cost
-                        let itemRetail, caseRetail;
-                        if (priceValues.length >= 2) {
-                            itemRetail = priceValues[0];
-                            caseRetail = priceValues[1];
-                        } else {
-                            itemRetail = priceValues[0];
-                            caseRetail = priceValues[0];
-                        }
+                        const itemRetail = priceValues[0];
+                        const caseRetail = priceValues[1];
                         
                         const perUnitRetail = itemRetail / qty;
                         const perUnitCost = caseRetail / qty;
                         
-                        if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0 && marginPercent < 200) {
+                        // Validate data
+                        if (!isNaN(perUnitRetail) && !isNaN(marginPercent) && marginPercent > 0 && marginPercent < 200 
+                            && qty > 0 && itemRetail > 0 && caseRetail > 0) {
+                            
                             const guide = MARGINS[category];
                             let status = 'ok';
                             
