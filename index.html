@@ -111,36 +111,39 @@
             const items = [];
             const lines = text.split('\n');
             
-            // Process line by line
+            const skipWords = ['Item', 'Retailed', 'Total Discount', 'Invoice Total', 'Invoice Margin', 
+                             'Total Rebate', 'Margin After', 'Case Name', 'Dept', 'Qty', 'EDI', 'SRP',
+                             'GROCERY', 'Units Per', 'Case Retail', 'Case Cost', 'Discount', 'Invoice Totals'];
+            
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 
                 // SKIP if empty or too short
                 if (!line || line.length < 5) continue;
                 
-                // SKIP header/footer keywords
-                if (['Item', 'Retailed', 'Total Discount', 'Invoice Total', 'Invoice Margin', 
-                      'Total Rebate', 'Margin After', 'Case Name', 'Dept', 'Qty', 'EDI', 'SRP',
-                      'GROCERY', 'Units Per', 'Case Retail', 'Case Cost', 'Discount', 'Invoice Totals'].some(word => line.includes(word))) {
-                    continue;
-                }
+                // SKIP header keywords
+                if (skipWords.some(word => line.includes(word))) continue;
                 
-                // THIS IS A PRODUCT LINE - now look ahead for category and data
+                // SKIP if line is pure numbers (UPC code) or starts with numbers (data line)
+                if (/^\d+(\.\d+)?(\s|$)/.test(line)) continue;
+                
+                // SKIP if line contains lots of $ and % (it's a data line)
+                const dollarCount = (line.match(/\$/g) || []).length;
+                const percentCount = (line.match(/%/g) || []).length;
+                if (dollarCount >= 3 && percentCount >= 1) continue;
+                
+                // THIS IS A PRODUCT NAME
                 const productName = line;
                 let category = null;
                 let dataLine = null;
                 
-                // Look ahead max 30 lines
+                // Look ahead for category and data
                 for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
                     const nextLine = lines[j].trim();
                     
-                    // Skip empty lines
-                    if (!nextLine) continue;
+                    if (!nextLine || nextLine.includes('GROCERY')) continue;
                     
-                    // Skip GROCERY lines
-                    if (nextLine.includes('GROCERY')) continue;
-                    
-                    // If no category found yet, check if this line IS a category
+                    // Check for category
                     if (!category) {
                         for (let key of Object.keys(MARGINS)) {
                             if (nextLine === key || (nextLine.indexOf(key) !== -1 && !nextLine.includes('$'))) {
@@ -150,20 +153,18 @@
                         }
                     }
                     
-                    // Check for DATA LINE - must have: qty, prices with $, margin with %
+                    // Check for data line
                     if (nextLine.includes('$') && nextLine.includes('%')) {
-                        const dollarCount = (nextLine.match(/\$/g) || []).length;
-                        const percentMatch = nextLine.match(/(\d+\.\d+)%/);
-                        
-                        // Real data has at least 2 prices and a margin percentage
-                        if (dollarCount >= 2 && percentMatch) {
+                        const $ = (nextLine.match(/\$/g) || []).length;
+                        const % = (nextLine.match(/%/g) || []).length;
+                        if ($ >= 2 && % >= 1) {
                             dataLine = nextLine;
                             break;
                         }
                     }
                 }
                 
-                // Parse if we have both
+                // Parse if valid
                 if (dataLine && category) {
                     try {
                         const numbers = dataLine.match(/[\d.]+/g) || [];
@@ -181,7 +182,6 @@
                             const perUnitRetail = itemRetail / qty;
                             const perUnitCost = caseRetail / qty;
                             
-                            // Validate
                             if (qty > 0 && itemRetail > 0 && caseRetail > 0 && marginPercent > 0 && marginPercent < 200) {
                                 const guide = MARGINS[category];
                                 let status = 'ok';
@@ -204,9 +204,7 @@
                                 }
                             }
                         }
-                    } catch (e) {
-                        // Skip on parse error
-                    }
+                    } catch (e) {}
                 }
             }
             
