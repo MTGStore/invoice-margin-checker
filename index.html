@@ -131,8 +131,8 @@
             const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 0);
             
             let currentProduct = null;
+            let currentUPC = null;
             let currentCategory = null;
-            let lastDataLine = null;
             
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
@@ -167,6 +167,7 @@
                                 
                                 items.push({
                                     product: currentProduct.substring(0, 80),
+                                    upc: currentUPC || 'N/A',
                                     category: currentCategory,
                                     margin: invoiceMargin,
                                     retailPrice: itemRetail,
@@ -176,6 +177,7 @@
                                 });
                                 
                                 currentProduct = null;
+                                currentUPC = null;
                                 currentCategory = null;
                             }
                         } catch (e) {}
@@ -188,8 +190,11 @@
                             break;
                         }
                     }
-                } else if (!line.match(/^\d{8,}/) && !line.match(/^[0-9.]+$/) && !line.match(/\$/) && line.length > 5 && currentCategory) {
-                    // This is a PRODUCT NAME (non-header line without prices)
+                } else if (line.match(/^\d{8,}/) && !line.includes('$')) {
+                    // This is a UPC/EDI CODE
+                    currentUPC = line;
+                } else if (!line.match(/^\d{8,}/) && !line.match(/^[0-9.]+$/) && !line.match(/\$/) && line.length > 5 && !line.includes('GROCERY') && currentCategory) {
+                    // This is a PRODUCT NAME (actual product, not UPC, not category, not numbers)
                     currentProduct = line;
                 }
             }
@@ -224,6 +229,7 @@
                     
                     violations.push({
                         product: item.product,
+                        upc: item.upc,
                         category: item.category,
                         margin: item.margin.toFixed(2),
                         current: item.retailPrice.toFixed(2),
@@ -242,7 +248,7 @@
             
             if (violations.length > 0) {
                 html += `<div class="violations-header">⚠️ ${violations.length} ITEMS NEED PRICE ADJUSTMENT</div>`;
-                html += `<table class="violations-table"><thead><tr><th>Product</th><th>Category</th><th>Current Retail</th><th>Current Margin</th><th>Target Range</th><th>Suggested Retail</th></tr></thead><tbody>`;
+                html += `<table class="violations-table"><thead><tr><th>UPC</th><th>Product</th><th>Category</th><th>Current Retail</th><th>Current Margin</th><th>Target Range</th><th>Suggested Retail</th></tr></thead><tbody>`;
                 
                 for (const v of violations) {
                     const bgColor = v.status === 'low' ? '#ffcccc' : '#ffe0b2';
@@ -250,6 +256,7 @@
                     const label = v.status === 'low' ? '🔴 RAISE' : '🟠 LOWER';
                     
                     html += `<tr style="background: ${bgColor}; border-left: 4px solid ${borderColor};">
+                        <td><strong>${v.upc}</strong></td>
                         <td><strong>${v.product}</strong></td>
                         <td>${v.category}</td>
                         <td>$${v.current}</td>
