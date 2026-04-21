@@ -128,85 +128,70 @@
         
         function parseInvoiceTable(text) {
             const items = [];
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 3);
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l && l.length > 0);
             
-            const headerKeywords = [
-                'Case Name', 'Dept', 'Qty', 'EDI', 'SRP', 'Item', 'Retail', 'Units', 'Case', 'Cost', 
-                'Discount', 'Invoice', 'Totals', 'Margin', 'Rebate', 'After', 'Total', 'Retailed'
-            ];
+            let currentProduct = null;
+            let currentCategory = null;
+            let lastDataLine = null;
             
-            let i = 0;
-            while (i < lines.length) {
+            for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
+                if (!line) continue;
                 
-                if (!line || line.length < 4) { i++; continue; }
-                if (headerKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase()))) { i++; continue; }
-                if (line.match(/^\d{8,}/)) { i++; continue; }  // Skip EDI codes
-                if (line.match(/^[0-9.]+$/) && line.split('.').length < 3) { i++; continue; }  // Skip pure numbers
+                // Check if this is a data line (has multiple $ symbols, % symbol, and tabs/spaces)
+                const dollarCount = (line.match(/\$/g) || []).length;
+                const hasPercent = line.includes('%');
+                const hasTabsOrMultipleSpaces = /\t|  {2,}/.test(line);
                 
-                const productName = line;
-                let category = null;
-                let invoiceMargin = null;
-                let caseRetail = null;
-                let caseCost = null;
-                
-                for (let j = i + 1; j < Math.min(i + 25, lines.length); j++) {
-                    const nextLine = lines[j];
-                    if (!nextLine) continue;
+                if (dollarCount >= 3 && hasPercent && hasTabsOrMultipleSpaces) {
+                    // This is a DATA LINE
+                    const prices = line.match(/\$[\d.,]+/g) || [];
+                    const margins = line.match(/(\d+\.\d+)%/g) || [];
+                    const numbers = line.match(/[\d.]+/g) || [];
                     
-                    if (headerKeywords.some(kw => nextLine.toLowerCase().includes(kw.toLowerCase()))) continue;
-                    
-                    if (!category && (nextLine.toLowerCase().includes('grocery') || nextLine.match(/^[A-Z][a-z\s-]+$/) || Object.keys(MARGINS).some(k => nextLine.toLowerCase().includes(k.toLowerCase())))) {
-                        for (let key of Object.keys(MARGINS)) {
-                            if (nextLine.toLowerCase() === key.toLowerCase() || nextLine.toLowerCase().includes(key.toLowerCase())) {
-                                category = key;
-                                break;
+                    if (prices.length >= 3 && margins.length > 0 && numbers.length >= 2 && currentProduct && currentCategory) {
+                        try {
+                            const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, '')));
+                            const unitsPerCase = parseFloat(numbers[1]) || 1;
+                            
+                            const itemRetail = priceValues[0];
+                            const caseCost = priceValues[2];
+                            const costPerUnit = caseCost / unitsPerCase;
+                            const invoiceMargin = parseFloat(margins[margins.length - 1]);
+                            
+                            if (itemRetail > costPerUnit && invoiceMargin > 0 && invoiceMargin < 100) {
+                                const guide = MARGINS[currentCategory];
+                                let status = 'ok';
+                                if (invoiceMargin < guide.min) status = 'low';
+                                else if (invoiceMargin > guide.max) status = 'high';
+                                
+                                items.push({
+                                    product: currentProduct.substring(0, 80),
+                                    category: currentCategory,
+                                    margin: invoiceMargin,
+                                    retailPrice: itemRetail,
+                                    costPrice: costPerUnit,
+                                    status: status,
+                                    guide: guide
+                                });
+                                
+                                currentProduct = null;
+                                currentCategory = null;
                             }
+                        } catch (e) {}
+                    }
+                } else if (Object.keys(MARGINS).some(cat => line.toLowerCase() === cat.toLowerCase() || (line.toLowerCase().includes(cat.toLowerCase()) && line.includes('GROCERY')))) {
+                    // This is a CATEGORY LINE
+                    for (let cat of Object.keys(MARGINS)) {
+                        if (line.toLowerCase() === cat.toLowerCase() || (line.toLowerCase().includes(cat.toLowerCase()) && line.includes('GROCERY'))) {
+                            currentCategory = cat;
+                            break;
                         }
                     }
-                    
-                    if (nextLine.includes('%') && nextLine.match(/\$[\d.]+/)) {
-                        const prices = nextLine.match(/\$[\d.,]+/g) || [];
-                        const margins = nextLine.match(/(\d+\.\d+)%/g) || [];
-                        const numbers = nextLine.match(/[\d.]+/g) || [];
-                        
-                        if (prices.length >= 3 && margins.length > 0 && numbers.length >= 2) {
-                            try {
-                                const priceValues = prices.map(p => parseFloat(p.replace(/[$,]/g, '')));
-                                const unitsPerCase = parseFloat(numbers[1]) || 1;
-                                
-                                const itemRetail = priceValues[0];
-                                const caseCost = priceValues[2];
-                                const costPerUnit = caseCost / unitsPerCase;
-                                
-                                caseRetail = itemRetail;
-                                caseCost = costPerUnit;
-                                invoiceMargin = parseFloat(margins[margins.length - 1]);
-                                
-                                if (caseRetail > caseCost && invoiceMargin > 0 && invoiceMargin < 100) break;
-                            } catch (e) {}
-                        }
-                    }
+                } else if (!line.match(/^\d{8,}/) && !line.match(/^[0-9.]+$/) && !line.match(/\$/) && line.length > 5 && currentCategory) {
+                    // This is a PRODUCT NAME (non-header line without prices)
+                    currentProduct = line;
                 }
-                
-                if (category && invoiceMargin && caseRetail && caseCost && caseRetail > caseCost && invoiceMargin > 0) {
-                    const guide = MARGINS[category];
-                    let status = 'ok';
-                    if (invoiceMargin < guide.min) status = 'low';
-                    else if (invoiceMargin > guide.max) status = 'high';
-                    
-                    items.push({
-                        product: productName.substring(0, 80),
-                        category: category,
-                        margin: invoiceMargin,
-                        retailPrice: caseRetail,
-                        costPrice: caseCost,
-                        status: status,
-                        guide: guide
-                    });
-                }
-                
-                i++;
             }
             
             return items;
