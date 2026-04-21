@@ -225,7 +225,9 @@
                     ok++;
                 } else {
                     const targetMargin = (item.guide.min + item.guide.max) / 2;
-                    const suggestedRetail = item.costPrice / (1 - (targetMargin / 100));
+                    // Calculate what the new retail price should be to hit target margin
+                    // Formula: NewPrice = Cost / (1 - TargetMargin%)
+                    const newRetailPrice = item.costPrice / (1 - (targetMargin / 100));
                     
                     violations.push({
                         product: item.product,
@@ -234,7 +236,7 @@
                         margin: item.margin.toFixed(2),
                         current: item.retailPrice.toFixed(2),
                         target: `${item.guide.min}-${item.guide.max}%`,
-                        suggested: suggestedRetail.toFixed(2),
+                        suggested: newRetailPrice.toFixed(2),
                         status: item.status
                     });
                 }
